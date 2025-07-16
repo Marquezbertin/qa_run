@@ -50,7 +50,3 @@ O jogo contém frases e perguntas relacionadas a:
 - Canvas API
 - LocalStorage (para recordes)
 
-## 📁 Estrutura
-
-- `index.html` — contém todo o código do jogo (HTML, CSS e JS integrados)
-- Áudios utili
