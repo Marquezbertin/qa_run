@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QA Run - Corrida da Qualidade</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Press Start 2P', cursive;
+      background-color: #1b1c1f;
+      color: #fff;
+      overflow: hidden;
+    }
+    #gameCanvas {
+      background: linear-gradient(to top, #282c34, #1b1c1f);
+      display: block;
+      margin: 40px auto;
+      border: 4px solid #61dafb;
+    }
+    .hud {
+      text-align: center;
+      margin-top: 10px;
+    }
+    .hud p {
+      font-size: 12px;
+      margin: 4px;
+    }
+    .start-btn {
+      display: block;
+      margin: 20px auto;
+      padding: 10px 20px;
+      background: #61dafb;
+      color: #1b1c1f;
+      border: none;
+      cursor: pointer;
+      font-family: 'Press Start 2P';
+      font-size: 14px;
+    }
+    .mobile-controls {
+      display: none;
+      text-align: center;
+      margin-top: 10px;
+    }
+    .mobile-controls button {
+      padding: 12px 24px;
+      font-family: 'Press Start 2P';
+      font-size: 12px;
+      background: #ffbe0b;
+      color: #000;
+      border: none;
+      border-radius: 4px;
+    }
+    @media (max-width: 768px) {
+      .mobile-controls {
+        display: block;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="400"></canvas>
+  <div class="hud">
+    <p id="score">Bugs Corrigidos: 0</p>
+    <p id="stamina">Energia QA: 100%</p>
+    <p id="lives">Vidas QA: 3</p>
+    <p id="phase">Sprint: 1</p>
+    <p id="message"></p>
+    <button class="start-btn" onclick="startGame()">Iniciar Corrida QA</button>
+  </div>
+  <div class="mobile-controls">
+    <button onclick="triggerJump()">PULAR</button>
+  </div>
+
+  <audio id="jumpSound" src="https://cdn.pixabay.com/audio/2022/03/15/audio_0c95c6a9f0.mp3"></audio>
+  <audio id="hitSound" src="https://cdn.pixabay.com/audio/2022/03/15/audio_b5ad9cd74f.mp3"></audio>
+  <audio id="bgMusic" src="https://cdn.pixabay.com/audio/2022/10/16/audio_12e7b7e7e2.mp3"></audio>
+
+  <script>
+    function startGame() {
+      // Pausa todos os sons antes de iniciar
+      bgMusic.pause();
+      hitSound.pause();
+      jumpSound.pause();
+      checkpointSound.pause();
+      winSound.pause();
+      // Reinicia variáveis
+      gameActive = true;
+      paused = false;
+      score = 0;
+      stamina = 100;
+      lives = 3;
+      bugX = 800;
+      jumpHeight = 0;
+      velocityY = 0;
+      checkpoint = 0;
+      phase = 1;
+      bugType = Math.floor(Math.random() * 3);
+      powerUp.active = false;
+      particles = [];
+      document.getElementById("message").textContent = "";
+      document.querySelector(".start-btn").textContent = "Iniciar Corrida QA";
+      document.querySelector(".start-btn").style.display = "none";
+      bgMusic.currentTime = 0;
+      bgMusic.volume = 0.3;
+      bgMusic.loop = true;
+      bgMusic.play().catch(()=>{});
+      requestAnimationFrame(gameLoop);
+    }
+
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const jumpSound = document.getElementById("jumpSound");
+    const hitSound = document.getElementById("hitSound");
+    const bgMusic = document.getElementById("bgMusic");
+
+    let gameActive = false;
+    let score = 0;
+    let stamina = 100;
+    let lives = 3;
+    let bugX = 800;
+    let runnerX = 50;
+    let jump = false;
+    let jumpHeight = 0;
+    let bugSpeed = 2.5;
+    let jumpVelocity = 5;
+    let jumpCounter = 0;
+    let checkpoint = 0;
+    let phase = 1;
+    const messages = [
+      "Requisito mal definido é bug certo!",
+      "Teste automatizado salva o deploy.",
+      "Cobertura de testes é qualidade preventiva.",
+      "QA não é só teste, é estratégia!",
+      "Testes exploratórios revelam o inesperado."
+    ];
+
+    let gravity = 0.5;      // Menor gravidade = pulo mais demorado
+    let jumpPower = 16;     // Maior força = pulo mais alto
+    let velocityY = 0;
+
+    // Novos elementos de cenário
+    let clouds = [
+      { x: 100, y: 60, speed: 0.3, size: 1 },
+      { x: 400, y: 90, speed: 0.2, size: 1.3 },
+      { x: 700, y: 50, speed: 0.25, size: 0.8 }
+    ];
+    let birds = [
+      { x: 900, y: 120, speed: 1.2 },
+      { x: 1300, y: 160, speed: 1.5 }
+    ];
+    let trees = [
+      { x: 200, y: 340, speed: 0.5 },
+      { x: 600, y: 340, speed: 0.4 }
+    ];
+    let sun = { x: 700, y: 80, r: 40 };
+
+    let groundY = 340;
+
+    // Novos sons
+    const checkpointSound = new Audio("https://cdn.pixabay.com/audio/2022/03/15/audio_12e7b7e7e2.mp3");
+    const winSound = new Audio("https://cdn.pixabay.com/audio/2022/03/15/audio_126514.mp3");
+
+    // Fases do jogo: cada fase muda cenário, obstáculos e velocidade
+    const phases = [
+      {
+        name: "Sprint 1: Início do Projeto",
+        bgColor: ["#87ceeb", "#e0eafc"],
+        groundColor: "#228B22",
+        obstacleColor: "#e63946",
+        speed: 2.5,
+        cloudColor: "#fff",
+        sunColor: "#ffe066"
+      },
+      {
+        name: "Sprint 2: Deploy Noturno",
+        bgColor: ["#232526", "#414345"],
+        groundColor: "#444",
+        obstacleColor: "#f77f00",
+        speed: 3.2,
+        cloudColor: "#bbb",
+        sunColor: "#f7e9a0"
+      },
+      {
+        name: "Sprint 3: Testes Intensos",
+        bgColor: ["#b2fefa", "#0ed2f7"],
+        groundColor: "#0a9396",
+        obstacleColor: "#005f73",
+        speed: 4.0,
+        cloudColor: "#e0fbfc",
+        sunColor: "#ffd166"
+      },
+      {
+        name: "Sprint 4: Bug Bash",
+        bgColor: ["#ffecd2", "#fcb69f"],
+        groundColor: "#f77f00",
+        obstacleColor: "#d62828",
+        speed: 4.8,
+        cloudColor: "#fff3e6",
+        sunColor: "#fcbf49"
+      }
+    ];
+
+    // Power-up: estrela que recupera energia
+    let powerUp = { x: -100, y: 320, active: false, timer: 0 };
+
+    // Ranking local
+    let bestScore = localStorage.getItem("qa_run_best") || 0;
+
+    // Barra de progresso
+    function drawProgressBar() {
+      const total = 60;
+      const percent = Math.min(score / total, 1);
+      ctx.save();
+      ctx.fillStyle = "#222";
+      ctx.fillRect(600, 20, 180, 18);
+      ctx.fillStyle = "#61dafb";
+      ctx.fillRect(600, 20, 180 * percent, 18);
+      ctx.strokeStyle = "#fff";
+      ctx.strokeRect(600, 20, 180, 18);
+      ctx.font = "10px 'Press Start 2P'";
+      ctx.fillStyle = "#fff";
+      ctx.fillText("Progresso", 610, 33);
+      ctx.restore();
+    }
+
+    // Partículas de efeito
+    let particles = [];
+    function spawnParticles(x, y, color) {
+      for (let i = 0; i < 12; i++) {
+        particles.push({
+          x, y,
+          dx: Math.cos((i/12)*2*Math.PI)*Math.random()*3,
+          dy: Math.sin((i/12)*2*Math.PI)*Math.random()*3,
+          life: 20,
+          color
+        });
+      }
+    }
+    function updateParticles() {
+      particles = particles.filter(p => p.life > 0);
+      particles.forEach(p => {
+        ctx.save();
+        ctx.globalAlpha = p.life / 20;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4, 0, Math.PI*2);
+        ctx.fill();
+        ctx.restore();
+        p.x += p.dx;
+        p.y += p.dy;
+        p.dy += 0.15;
+        p.life--;
+      });
+    }
+
+    // Pausa
+    let paused = false;
+    function togglePause() {
+      if (!gameActive) return;
+      paused = !paused;
+      if (!paused) requestAnimationFrame(gameLoop);
+      else {
+        ctx.save();
+        ctx.globalAlpha = 0.8;
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.globalAlpha = 1;
+        ctx.font = "28px 'Press Start 2P'";
+        ctx.fillStyle = "#fff";
+        ctx.fillText("PAUSADO", 300, 200);
+        ctx.restore();
+      }
+    }
+
+    // Atualiza fase conforme score
+    function updatePhase() {
+      let idx = Math.floor(score / 15);
+      if (idx >= phases.length) idx = phases.length - 1;
+      phase = idx + 1;
+      bugSpeed = phases[idx].speed;
+    }
+
+    // Power-up aparece aleatoriamente
+    function maybeSpawnPowerUp() {
+      if (!powerUp.active && Math.random() < 0.003 && score > 0) {
+        powerUp.x = 800;
+        powerUp.y = 320 + Math.random()*20;
+        powerUp.active = true;
+        powerUp.timer = 0;
+      }
+    }
+
+    function drawPowerUp() {
+      if (powerUp.active) {
+        ctx.save();
+        ctx.globalAlpha = 0.9;
+        ctx.beginPath();
+        ctx.arc(powerUp.x + 15, powerUp.y + 15, 15, 0, Math.PI*2);
+        ctx.fillStyle = "#ffe066";
+        ctx.shadowColor = "#fff";
+        ctx.shadowBlur = 20;
+        ctx.fill();
+        ctx.font = "16px 'Press Start 2P'";
+        ctx.fillStyle = "#f77f00";
+        ctx.fillText("★", powerUp.x + 3, powerUp.y + 22);
+        ctx.restore();
+      }
+    }
+
+    function drawBackground() {
+      // Fase atual
+      let idx = Math.floor(score / 15);
+      if (idx >= phases.length) idx = phases.length - 1;
+      let phaseObj = phases[idx];
+
+      // Céu com gradiente da fase
+      let grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      grad.addColorStop(0, phaseObj.bgColor[0]);
+      grad.addColorStop(1, phaseObj.bgColor[1]);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Sol/Lua
+      ctx.save();
+      ctx.globalAlpha = 0.8;
+      ctx.beginPath();
+      ctx.arc(sun.x, sun.y, sun.r, 0, Math.PI * 2);
+      ctx.fillStyle = phaseObj.sunColor;
+      ctx.shadowColor = phaseObj.sunColor;
+      ctx.shadowBlur = 40;
+      ctx.fill();
+      ctx.restore();
+
+      // Nuvens
+      clouds.forEach(cloud => {
+        ctx.save();
+        ctx.globalAlpha = 0.7;
+        ctx.fillStyle = phaseObj.cloudColor;
+        ctx.beginPath();
+        ctx.ellipse(cloud.x, cloud.y, 40 * cloud.size, 20 * cloud.size, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        cloud.x -= cloud.speed;
+        if (cloud.x < -80) cloud.x = 900 + Math.random() * 200;
+      });
+
+      // Pássaros
+      birds.forEach(bird => {
+        ctx.save();
+        ctx.strokeStyle = "#444";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(bird.x, bird.y, 10, Math.PI * 0.2, Math.PI * 0.8, false);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(bird.x + 15, bird.y, 10, Math.PI * 0.2, Math.PI * 0.8, false);
+        ctx.stroke();
+        ctx.restore();
+        bird.x -= bird.speed;
+        if (bird.x < -30) bird.x = 900 + Math.random() * 300;
+      });
+
+      // Árvores
+      trees.forEach(tree => {
+        ctx.save();
+        ctx.fillStyle = "#8d5524";
+        ctx.fillRect(tree.x, tree.y + 10, 12, 40);
+        ctx.beginPath();
+        ctx.arc(tree.x + 6, tree.y + 10, 22, 0, Math.PI * 2);
+        ctx.fillStyle = "#228B22";
+        ctx.fill();
+        ctx.restore();
+        tree.x -= tree.speed;
+        if (tree.x < -40) tree.x = 850 + Math.random() * 200;
+      });
+
+      // Chão com textura da fase
+      ctx.fillStyle = phaseObj.groundColor;
+      ctx.fillRect(0, groundY + 40, canvas.width, 60);
+      for (let i = 0; i < canvas.width; i += 40) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(i + 20, groundY + 80, 18, 0, Math.PI, true);
+        ctx.fillStyle = "#155a1a";
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // Obstáculos variados por fase
+    function drawObstacle(x, y, type) {
+      let idx = Math.floor(score / 15);
+      if (idx >= phases.length) idx = phases.length - 1;
+      let phaseObj = phases[idx];
+
+      if (type === 0) {
+        ctx.fillStyle = phaseObj.obstacleColor;
+        ctx.fillRect(x, y, 30, 30);
+      } else if (type === 1) {
+        ctx.fillStyle = "#f77f00";
+        ctx.beginPath();
+        ctx.arc(x + 15, y + 15, 15, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Obstáculo animado: bug pulando
+        ctx.save();
+        ctx.fillStyle = "#222";
+        ctx.beginPath();
+        ctx.ellipse(x + 15, y + 20 + Math.sin(Date.now()/100)*8, 18, 12, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // Mensagens educativas extras
+    const tips = [
+      "Dica: Use espaço ou toque para pular obstáculos!",
+      "Curiosidade: Testes automatizados aceleram o QA.",
+      "Sabia? QA ajuda a prevenir bugs antes do deploy.",
+      "Teste cedo e frequentemente para identificar erros antes que se tornem críticos.",
+      "Mantenha o código limpo e legível para facilitar manutenção e colaboração.",
+      "Dica: Cada bug corrigido é um passo para a qualidade!",
+      "Lembre-se: QA não é só encontrar bugs, é garantir qualidade!",
+      "A comunicação entre QA e desenvolvedores é essencial para o sucesso do projeto.",
+      "Dica: Use testes exploratórios para descobrir bugs inesperados!",
+      "Dica: Mantenha a calma, até os melhores QAs erram!",
+      "Dica: Testes unitários são a base de um bom QA!",
+      "Dica: Sempre revise o código antes de enviar para produção!",
+      "Dica: Atenção ao tempo do pulo para não errar!"
+
+    ];
+
+    // Dica na tela
+    let tipIndex = 0;
+    setInterval(() => {
+      tipIndex = (tipIndex + 1) % tips.length;
+    }, 8000);
+
+    // Perguntas do quiz
+    const quizQuestions = [
+      {
+        question: "O que é um bug?",
+        options: ["Um recurso novo", "Um erro no software", "Uma melhoria", "Um teste automatizado"],
+        answer: 1
+      },
+      {
+        question: "O que é teste unitário?",
+        options: ["Testa o sistema inteiro", "Testa partes pequenas do código", "Testa só a interface", "Testa só performance"],
+        answer: 1
+      },
+      {
+        question: "Qual destas NÃO é uma metodologia ágil?",
+        options: ["Scrum", "Kanban", "Waterfall", "XP"],
+        answer: 2
+      },
+      {
+        question: "O que significa QA?",
+        options: ["Quality Assurance", "Quick Access", "Query Analyzer", "Quality Automation"],
+        answer: 0
+      },
+      {
+        question: "No Scrum, o que é Sprint?",
+        options: ["Uma reunião", "Um bug", "Um ciclo de trabalho", "Um teste"],
+        answer: 2
+      }
+    ];
+
+    function showQuiz() {
+      let quizDiv = document.createElement("div");
+      quizDiv.style.position = "fixed";
+      quizDiv.style.top = "0";
+      quizDiv.style.left = "0";
+      quizDiv.style.width = "100vw";
+      quizDiv.style.height = "100vh";
+      quizDiv.style.background = "rgba(0,0,0,0.95)";
+      quizDiv.style.color = "#fff";
+      quizDiv.style.fontFamily = "'Press Start 2P', cursive";
+      quizDiv.style.display = "flex";
+      quizDiv.style.flexDirection = "column";
+      quizDiv.style.justifyContent = "center";
+      quizDiv.style.alignItems = "center";
+      quizDiv.style.zIndex = "9999";
+
+      let scoreQuiz = 0;
+      let current = 0;
+
+      function renderQuestion() {
+        quizDiv.innerHTML = "";
+        let q = quizQuestions[current];
+        let h2 = document.createElement("h2");
+        h2.textContent = "Quiz Final";
+        quizDiv.appendChild(h2);
+
+        let p = document.createElement("p");
+        p.textContent = q.question;
+        quizDiv.appendChild(p);
+
+        q.options.forEach((opt, idx) => {
+          let btn = document.createElement("button");
+          btn.textContent = opt;
+          btn.style.margin = "8px";
+          btn.style.padding = "8px 16px";
+          btn.style.fontFamily = "'Press Start 2P', cursive";
+          btn.onclick = () => {
+            if (idx === q.answer) scoreQuiz++;
+            current++;
+            if (current < quizQuestions.length) {
+              renderQuestion();
+            } else {
+              showResult();
+            }
+          };
+          quizDiv.appendChild(btn);
+        });
+      }
+
+      function showResult() {
+        quizDiv.innerHTML = `<h2>Quiz Finalizado!</h2>
+          <p>Você acertou ${scoreQuiz} de ${quizQuestions.length} perguntas.</p>
+          <button style="margin-top:20px;padding:10px 20px;font-family:'Press Start 2P'" id="closeQuizBtn">Fechar</button>`;
+        document.getElementById("closeQuizBtn").onclick = function() {
+          document.body.removeChild(quizDiv);
+          document.querySelector(".start-btn").style.display = "block"; // Mostra o botão de iniciar
+        };
+      }
+
+      renderQuestion();
+      document.body.appendChild(quizDiv);
+    }
+
+    function gameLoop() {
+      if (!gameActive || paused) return;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      updatePhase();
+      drawBackground();
+
+      // Power-up
+      maybeSpawnPowerUp();
+      if (powerUp.active) {
+        powerUp.x -= bugSpeed;
+        drawPowerUp();
+        powerUp.timer++;
+        // Coleta
+        if (
+          powerUp.x < runnerX + 40 &&
+          powerUp.x + 30 > runnerX &&
+          powerUp.y < 300 + jumpHeight + 40 &&
+          powerUp.y + 30 > 300 + jumpHeight
+        ) {
+          stamina = Math.min(stamina + 30, 100);
+          lives = Math.min(lives + 1, 3); // Recupera 1 vida, máximo 3
+          spawnParticles(runnerX + 20, 300 + jumpHeight + 20, "#ffe066");
+          powerUp.active = false;
+          checkpointSound.currentTime = 0;
+          checkpointSound.play();
+        }
+        // Some após 5s
+        if (powerUp.timer > 300) powerUp.active = false;
+      }
+
+      // Física do pulo
+      velocityY += gravity;
+      jumpHeight += velocityY;
+      if (jumpHeight > 0) {
+        jumpHeight = 0;
+        velocityY = 0;
+      }
+
+      // Personagem animado
+      ctx.save();
+      ctx.translate(runnerX + 20, 300 + jumpHeight + 20);
+      ctx.rotate(Math.sin(Date.now() / 100) * 0.05);
+      ctx.fillStyle = "#fff";
+      ctx.shadowColor = "#61dafb";
+      ctx.shadowBlur = 10;
+      ctx.fillRect(-20, -20, 40, 40);
+      // Olhos
+      ctx.fillStyle = "#222";
+      ctx.beginPath();
+      ctx.arc(-8, -5, 4, 0, Math.PI * 2);
+      ctx.arc(8, -5, 4, 0, Math.PI * 2);
+      ctx.fill();
+      // Sorriso
+      ctx.strokeStyle = "#222";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 8, 10, 0, Math.PI, false);
+      ctx.stroke();
+      ctx.restore();
+
+      // Partículas
+      updateParticles();
+
+      // Obstáculo
+      drawObstacle(bugX, 300, bugType);
+
+      // Colisão
+      if (
+        bugX < runnerX + 40 &&
+        bugX + 30 > runnerX &&
+        300 + 40 > 300 + jumpHeight &&
+        300 < 300 + jumpHeight + 40 &&
+        jumpHeight >= -10
+      ) {
+        stamina = Math.max(stamina - 20, 0);
+        lives--;
+        bugX = 800;
+        bugType = Math.floor(Math.random() * 3);
+        hitSound.currentTime = 0;
+        hitSound.play();
+        spawnParticles(runnerX + 20, 300 + jumpHeight + 20, "#e63946");
+        if (lives <= 0) {
+          bgMusic.pause();
+          if (score > bestScore) {
+            bestScore = score;
+            localStorage.setItem("qa_run_best", bestScore);
+          }
+          endGame("GAME OVER");
+          return;
+        }
+      }
+
+      bugX -= bugSpeed;
+      if (bugX < -30) {
+        bugX = 800;
+        bugType = Math.floor(Math.random() * 3);
+        score++;
+        stamina = Math.min(stamina + 5, 100);
+        spawnParticles(bugX + 15, 315, "#61dafb");
+        if (score % 10 === 0) {
+          checkpoint++;
+          checkpointSound.currentTime = 0;
+          checkpointSound.play();
+          document.getElementById("message").textContent = messages[checkpoint % messages.length];
+        }
+      }
+
+      // HUD
+      ctx.font = "12px 'Press Start 2P'";
+      ctx.fillStyle = "#000";
+      ctx.fillText(phases[phase - 1].name, 20, 20);
+      ctx.fillText(tips[tipIndex], 20, 40);
+
+      // Barra de progresso
+      drawProgressBar();
+
+      // Melhor score
+      ctx.font = "10px 'Press Start 2P'";
+      ctx.fillStyle = "#fff";
+      ctx.fillText("Recorde: " + bestScore, 650, 60);
+
+      document.getElementById("score").textContent = "Bugs Corrigidos: " + score;
+      document.getElementById("stamina").textContent = "Energia QA: " + stamina + "%";
+      document.getElementById("lives").textContent = "Vidas QA: " + lives;
+      document.getElementById("phase").textContent = "Sprint: " + phase;
+
+      if (score === 60) {
+        bgMusic.pause();
+        winSound.currentTime = 0;
+        winSound.play();
+        if (score > bestScore) {
+          bestScore = score;
+          localStorage.setItem("qa_run_best", bestScore);
+        }
+        showQuiz();
+        return;
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    function endGame(message) {
+      gameActive = false;
+      ctx.fillStyle = "#f1faee";
+      ctx.font = "20px 'Press Start 2P'";
+      ctx.fillText(message, 220, 200);
+      ctx.font = "14px 'Press Start 2P'";
+      ctx.fillStyle = "#222";
+      ctx.fillText("Recorde: " + bestScore, 270, 240);
+      document.querySelector(".start-btn").textContent = "Reiniciar";
+      document.querySelector(".start-btn").style.display = "block";
+      // Pausa todos os sons
+      bgMusic.pause();
+      hitSound.pause();
+      jumpSound.pause();
+      checkpointSound.pause();
+      winSound.pause();
+    }
+
+    function triggerJump() {
+      if (jumpHeight === 0 && gameActive && !paused) {
+        velocityY = -jumpPower;
+        jumpSound.currentTime = 0;
+        jumpSound.play();
+        spawnParticles(runnerX + 20, 300 + jumpHeight + 40, "#61dafb");
+      }
+    }
+
+    window.addEventListener("keydown", (e) => {
+      if (
+        e.code === "Space" ||
+        e.code === "Spacebar" ||
+        e.key === " " ||
+        e.key === "Spacebar"
+      ) {
+        e.preventDefault();
+        triggerJump();
+      }
+      if (e.code === "KeyP") {
+        togglePause();
+      }
+    });
+
+    // Mobile pause button (opcional)
+    // <button onclick="togglePause()">PAUSAR</button>
+  </script>
+</body>
+</html>
